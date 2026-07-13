@@ -1,7 +1,5 @@
 FROM nvcr.io/nvidia/pytorch:21.06-py3
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Europe/Moscow
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt update
 #install specific versions of gdal
 RUN apt install libgdal-dev=3.0.4+dfsg-1build3 -y
