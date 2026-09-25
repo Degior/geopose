@@ -12,7 +12,7 @@ PYTHONPATH=.  python -u -m torch.distributed.launch \
  --distributed \
  --config configs/v2l.json \
  --workers 1 \
- --multiplier 4 \
+ --multiplier 1 \
  --data-dir $WDATA \
  --train-dir $DATA \
  --test_every 2 \

@@ -8,8 +8,7 @@ The solution is mostly based on the [CVPR EarthVision 2021 paper](https://arxiv.
 
 ## Dependencies
 
-The system is fully dockerized, hence it requires docker with nvidia runtime support
-All requirements are specified in the Dockerfile.
+The system is fully dockerized, hence it requires docker with nvidia runtime support. For local Python setup, use `req.txt` and the Makefile below.
 The docker image is based on the latest NGC Pytorch container which is optimized to work with new generation of Nvidia cards.
  
 ## Improvements over provided baseline
@@ -39,6 +38,48 @@ To run docker container and go to  container's  bash terminal
  # use host dir with the train or test data, e.g.
  docker run --network=host --gpus all --ipc host -v /mnt/datasets/geopose:/data -it geopose
 ```
+## Local setup
+
+`req.txt` is based on a pinned `pip freeze` of the current `.venv`; the OpenCV pin is kept compatible with the pinned NumPy version. It is suitable for reproducing this Python and CUDA environment, but it is not a portable requirements file for every operating system or GPU setup. Installing `GDAL`/`pygdal` also requires the matching GDAL system libraries.
+
+The project uses Python 3.9 by default. Create the environment and install the pinned dependencies with:
+
+```shell
+make venv
+make install
+```
+
+`make setup` combines those two commands. `make all` also builds the Cython extension. The Makefile adds the CUDA 12.4 PyTorch package index by default; override `PIP_EXTRA_INDEX_URL` if your environment uses a different package mirror.
+
+## Large-image prediction
+
+The input directory must contain images named `*_RGB.png` by default. The output directory receives one `_AGL.tif` and one `_VFLOW.json` file per input image, followed by the converted and compressed prediction directory when compression is enabled.
+
+The most common prediction settings are available as Make variables:
+
+```shell
+make predict \
+  DATA_DIR=/data/images \
+  OUTPUT_DIR=/data/submission \
+  WEIGHTS="weights/model-a.pt weights/model-b.pt" \
+  RGB_SUFFIX=png \
+  GPUS=1
+```
+
+The default `WEIGHTS` value points to the two local fold-1 checkpoints; pass `WEIGHTS` explicitly on a clean checkout. `make predict` also accepts `BATCH_SIZE`, `DOWNSAMPLE`, `UNIT`, `TILE_SIZE`, `COMPRESS`, and `MASTER_PORT`. For example, use `TILE_SIZE=1024` to reduce GPU memory usage or `COMPRESS=false` to skip post-processing.
+
+The same options can be passed directly to the wrapper:
+
+```shell
+./predict.sh \
+  --weights /models/model-a.pt /models/model-b.pt \
+  --input-dir /data/images \
+  --output-dir /data/submission \
+  --rgb-suffix png \
+  --gpus 1 \
+  --tile-size 2048
+```
+
 ## Training
 
 I used a workstation with 4xRTX A6000 during training. With some changes it can be easily trained on 2x RTX 3090 cards.

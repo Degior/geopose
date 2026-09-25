@@ -187,6 +187,7 @@ def test(args):
         predictions_dir = Path(args.predictions_dir)
         for images, rgb_paths in tqdm(test_loader):
             images = images.float().cuda()
+            images = images[:,:,:,3]
             # print(images)
             pred = predict_tta(models, images)
             # print("pred", pred)
@@ -266,24 +267,30 @@ def predict(args):
         models.append(model)
 
     with torch.no_grad():
-        tile_size = 2048
+        tile_size = args.tile_size
         dataset_dir = Path(args.dataset_dir)
-        rgb_paths = list(dataset_dir.glob(f"*_RGB.{args.rgb_suffix}"))
+        predictions_dir = Path(args.predictions_dir)
+        rgb_paths = sorted(dataset_dir.glob(f"*_RGB.{args.rgb_suffix}"))
+        if not rgb_paths:
+            raise ValueError(
+                f"no RGB images matching *_RGB.{args.rgb_suffix} found in {dataset_dir}"
+            )
         agl_paths = list(
             pth.with_name(pth.name.replace("_RGB", "_AGL")).with_suffix(".tif")
             for pth in rgb_paths
         )
-        agl_paths = [args.predictions_dir / Path(pth.name) for pth in agl_paths]
+        agl_paths = [predictions_dir / pth.name for pth in agl_paths]
         vflow_paths = list(
             pth.with_name(pth.name.replace("_RGB", "_VFLOW")).with_suffix(".json")
             for pth in rgb_paths
         )
-        vflow_paths = [args.predictions_dir / Path(pth.name) for pth in vflow_paths]
+        vflow_paths = [predictions_dir / pth.name for pth in vflow_paths]
         print(f"rgb_paths: {rgb_paths}")
         print(f"agl paths: {agl_paths}")
 
         for filecount in range(len(rgb_paths)):
             img = load_image(rgb_paths[filecount], args)
+            img = img[:, :, :3]
             image_copy = img
             print(f"image shape is: {img.shape}")
             w, h, z = img.shape
@@ -316,7 +323,9 @@ def predict(args):
                         # print(f'i is {i} j is {j}')
                         frag = img[:, :, i:i+tile_size, j:j+tile_size]
                         # print(f"frag shape: {frag.shape}")
-                        frag = torch.from_numpy(frag)
+                        frag = torch.from_numpy(frag).to(
+                            device=f"cuda:{local_rank}", dtype=torch.float32
+                        )
                         # print(f"frag dtype: {frag.dtype}")
                         out = predict_tta(models, frag)
                         # print(f"out length: {len(out)}, out: {out}")
@@ -345,6 +354,11 @@ def predict(args):
             res = res.reshape((w_new, h_new))
             res = res[:w, :h]
 
-            # cv2.imwrite(args.predictions_dir + '/res.tif', res)
-            save_image_polygonal(agl_paths[filecount], res)
-            json.dump(vflow_data, vflow_paths[filecount].open("w"))
+            if local_rank == 0:
+                save_image_polygonal(agl_paths[filecount], res)
+                with vflow_paths[filecount].open("w") as vflow_file:
+                    json.dump(vflow_data, vflow_file)
+
+        dist.barrier()
+        if local_rank == 0 and args.convert_predictions_to_cm_and_compress:
+            convert_and_compress_prediction_dir(predictions_dir=predictions_dir)

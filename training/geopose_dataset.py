@@ -159,8 +159,12 @@ class GeoposeDataset(Dataset):
             height = image.shape[0]
             tries = 0
             while tries < 10:
-                y = random.randint(0, height - crop_size - 1)
-                x = random.randint(0, height - crop_size - 1)
+                if height <= crop_size:
+                    y = 0
+                    x = 0
+                else:
+                    y = random.randint(0, height - crop_size - 1)
+                    x = random.randint(0, height - crop_size - 1)
                 if not self.is_val:
                     tries += 1
                     nan_mask = np.isnan(agl[y: y + crop_size, x:x + crop_size])
