@@ -1,7 +1,7 @@
 PYTHON ?= python3.9
 VENV ?= .venv
 VENV_PYTHON := $(VENV)/bin/python
-REQS ?= req.txt
+REQS ?= requirements.txt
 PIP_EXTRA_INDEX_URL ?= https://download.pytorch.org/whl/cu124
 INSTALL_STAMP := $(VENV)/.requirements-installed
 BUILD_STAMP := $(VENV)/.cython-built
@@ -25,7 +25,7 @@ help:
 	@printf '%s\n' \
 		'Targets:' \
 		'  make venv       Create the virtual environment' \
-		'  make install    Install dependencies from req.txt' \
+		'  make install    Install dependencies from requirements.txt' \
 		'  make setup      Create the environment and install dependencies' \
 		'  make build      Build the Cython extension' \
 		'  make predict    Run large-image prediction' \
