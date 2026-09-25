@@ -16,6 +16,7 @@ myfiles/
 .idea/
 .venv/
 *.swp
+*.swo
 .ipynb_checkpoints/
 build/
 data/

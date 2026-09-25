@@ -17,8 +17,20 @@ DOWNSAMPLE ?= 1
 UNIT ?= cm
 TILE_SIZE ?= 2048
 COMPRESS ?= true
+CLUSTER_PARTITION ?= hiperf
+CLUSTER_NODE ?= tesla-a100
+CLUSTER_NODES ?= 1
+CLUSTER_GPUS ?= 8
+CLUSTER_CPUS ?= 10
+CLUSTER_MEMORY ?= 40000
+CLUSTER_TIME ?= 20:00:00
+CLUSTER_JOB_NAME ?= geopose-predict
+CLUSTER_LOG_DIR ?= logs
+CLUSTER_GRES ?= gpu:$(CLUSTER_GPUS)
+CLUSTER_CUDA_DEVICES ?=
+SBATCH_BIN ?= sbatch
 
-.PHONY: help all venv install setup build predict clean clean-venv
+.PHONY: help all venv install setup build predict predict-cluster clean clean-venv
 .DEFAULT_GOAL := help
 
 help:
@@ -29,6 +41,7 @@ help:
 		'  make setup      Create the environment and install dependencies' \
 		'  make build      Build the Cython extension' \
 		'  make predict    Run large-image prediction' \
+		'  make predict-cluster Submit prediction to a Slurm cluster' \
 		'  make all        Set up dependencies and build the extension' \
 		'  make clean      Remove generated build artifacts' \
 		'  make clean-venv Remove the virtual environment'
@@ -67,6 +80,35 @@ predict: build
 		--unit "$(UNIT)" \
 		--tile-size "$(TILE_SIZE)" \
 		--convert-predictions-to-cm-and-compress "$(COMPRESS)"
+
+predict-cluster: build
+	@test -n "$(strip $(WEIGHTS))" || { printf 'WEIGHTS must contain at least one checkpoint\n' >&2; exit 1; }
+	@mkdir -p "$(CLUSTER_LOG_DIR)"
+	@DATA_DIR="$(DATA_DIR)" \
+		OUTPUT_DIR="$(OUTPUT_DIR)" \
+		WEIGHTS="$(WEIGHTS)" \
+		RGB_SUFFIX="$(RGB_SUFFIX)" \
+		BATCH_SIZE="$(BATCH_SIZE)" \
+		DOWNSAMPLE="$(DOWNSAMPLE)" \
+		UNIT="$(UNIT)" \
+		TILE_SIZE="$(TILE_SIZE)" \
+		COMPRESS="$(COMPRESS)" \
+		MASTER_PORT="$(MASTER_PORT)" \
+		CLUSTER_PARTITION="$(CLUSTER_PARTITION)" \
+		CLUSTER_NODE="$(CLUSTER_NODE)" \
+		CLUSTER_NODES="$(CLUSTER_NODES)" \
+		CLUSTER_GPUS="$(CLUSTER_GPUS)" \
+		CLUSTER_CPUS="$(CLUSTER_CPUS)" \
+		CLUSTER_MEMORY="$(CLUSTER_MEMORY)" \
+		CLUSTER_TIME="$(CLUSTER_TIME)" \
+		CLUSTER_JOB_NAME="$(CLUSTER_JOB_NAME)" \
+		CLUSTER_LOG_DIR="$(CLUSTER_LOG_DIR)" \
+		CLUSTER_GRES="$(CLUSTER_GRES)" \
+		CLUSTER_CUDA_DEVICES="$(CLUSTER_CUDA_DEVICES)" \
+		SBATCH_BIN="$(SBATCH_BIN)" \
+		PYTHON="$(VENV_PYTHON)" \
+		SKIP_BUILD=1 \
+		./predict_cluster.sh
 
 clean:
 	rm -f utilities/invert_flow*.so
