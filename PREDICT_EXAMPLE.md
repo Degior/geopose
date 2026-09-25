@@ -1,12 +1,22 @@
-# Prediction example
+# Пример предсказания
 
-Set up the environment once:
+## Подготовка окружения
+
+Установите зависимости один раз:
 
 ```shell
 make setup
 ```
 
-Run prediction with the repository defaults:
+Сборка Cython-расширения также выполняется автоматически командой `make predict`. Если нужно собрать его отдельно, выполните:
+
+```shell
+make build
+```
+
+## Предсказание с локальными весами
+
+Веса не входят в репозиторий. Если они уже находятся в каталоге `weights/`, запустите:
 
 ```shell
 make predict \
@@ -19,7 +29,9 @@ make predict \
   COMPRESS=true
 ```
 
-Run with custom paths:
+## Пользовательские пути
+
+Для собственных каталогов и весов используйте явные пути:
 
 ```shell
 make predict \
@@ -30,7 +42,11 @@ make predict \
   GPUS=1
 ```
 
-The input directory must contain files named `*_RGB.png` by default. The wrapper also accepts the options directly:
+По умолчанию входные файлы должны иметь имена `*_RGB.png`. Для изменения расширения укажите `RGB_SUFFIX`.
+
+## Прямой запуск обёртки
+
+Те же параметры можно передать непосредственно в `predict.sh`:
 
 ```shell
 ./predict.sh \
@@ -41,3 +57,5 @@ The input directory must contain files named `*_RGB.png` by default. The wrapper
   --gpus 1 \
   --tile-size 2048
 ```
+
+Дополнительно можно настроить `BATCH_SIZE`, `DOWNSAMPLE`, `UNIT`, `COMPRESS` и `MASTER_PORT` через Makefile или переменные окружения.

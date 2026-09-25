@@ -1,78 +1,55 @@
-# Geopose Challenge 1st place solution
+# Geopose Challenge — решение, занявшее первое место
 
+## Обзор
 
-## Overview
+Решение в основном основано на [статье CVPR EarthVision 2021](https://arxiv.org/abs/2105.08229) и [статье CVPR 2020](http://openaccess.thecvf.com/content_CVPR_2020/papers/Christie_Learning_Geocentric_Object_Pose_in_Oblique_Monocular_Images_CVPR_2020_paper.pdf).
 
-The solution is mostly based on the [CVPR EarthVision 2021 paper](https://arxiv.org/abs/2105.08229) and the [CVPR 2020 main conference paper](http://openaccess.thecvf.com/content_CVPR_2020/papers/Christie_Learning_Geocentric_Object_Pose_in_Oblique_Monocular_Images_CVPR_2020_paper.pdf):
+## Требования
 
+Проект запускается локально в виртуальном окружении Python. По умолчанию используется Python 3.9, а для вычислений на GPU необходимы совместимые драйвер NVIDIA и CUDA.
 
-## Dependencies
+Зависимости из `req.txt` закреплены по локальному окружению проекта. Установка `GDAL` и `pygdal` также требует системных библиотек GDAL. Makefile по умолчанию использует индекс пакетов PyTorch для CUDA 12.4; при необходимости его можно изменить через `PIP_EXTRA_INDEX_URL`.
 
-The system is fully dockerized, hence it requires docker with nvidia runtime support. For local Python setup, use `req.txt` and the Makefile below.
-The docker image is based on the latest NGC Pytorch container which is optimized to work with new generation of Nvidia cards.
- 
-## Improvements over provided baseline
+## Установка
 
-While meta-architecture is mostly the same as provided baseline there are crucial differences that allow to increase score by 10%.
-
-- A very powerful encoder EfficientNet V2 L which has huge capacity,  receptive field and in addition to that it is less prone to overfitting. 
-- UNet like encoder with more filters and additional convolution blocks for better handling of fin grained details
-- improved train loop that uses mixed precision, random crops, distributed training
-- loss functions that directly optimize R2 metric
-- validation that computes final metric and used to select best checkpoints
-
-## Building and running docker image
-To build an image simply run the following command 
-```
- docker build -t geopose .
-```
-Under the hood it will 
-- pull docker image from NGC, 
-- install additional libraries like gdal, pygdal, timm, albumentations
-- download trained models to 'weights' in container 
-- cythonize vflow code
-
-To run docker container and go to  container's  bash terminal
-```
- docker run --network=host --gpus all --ipc host -v /<host_dir> :/<container_dir> -it geopose
- # use host dir with the train or test data, e.g.
- docker run --network=host --gpus all --ipc host -v /mnt/datasets/geopose:/data -it geopose
-```
-## Local setup
-
-`req.txt` is based on a pinned `pip freeze` of the current `.venv`; the OpenCV pin is kept compatible with the pinned NumPy version. It is suitable for reproducing this Python and CUDA environment, but it is not a portable requirements file for every operating system or GPU setup. Installing `GDAL`/`pygdal` also requires the matching GDAL system libraries.
-
-The project uses Python 3.9 by default. Create the environment and install the pinned dependencies with:
+Создайте виртуальное окружение и установите зависимости:
 
 ```shell
 make venv
 make install
 ```
 
-`make setup` combines those two commands. `make all` also builds the Cython extension. The Makefile adds the CUDA 12.4 PyTorch package index by default; override `PIP_EXTRA_INDEX_URL` if your environment uses a different package mirror.
+`make setup` выполняет эти два шага одной командой. `make all` дополнительно собирает Cython-расширение:
 
-## Large-image prediction
+```shell
+make setup
+make build
+```
 
-The input directory must contain images named `*_RGB.png` by default. The output directory receives one `_AGL.tif` and one `_VFLOW.json` file per input image, followed by the converted and compressed prediction directory when compression is enabled.
+Если в системе используется другой Python, передайте его путь через `PYTHON`, например `make venv PYTHON=python3.10`.
 
-The most common prediction settings are available as Make variables:
+## Предсказание на больших изображениях
+
+Каталог с входными данными должен содержать изображения с именами `*_RGB.png` по умолчанию. В выходной каталог для каждого изображения сохраняются файлы `_AGL.tif` и `_VFLOW.json`; при включённом сжатии также создаётся отдельный каталог с конвертированными и сжатыми результатами.
+
+Веса не входят в репозиторий, поэтому передайте пути к ним явно:
 
 ```shell
 make predict \
   DATA_DIR=/data/images \
   OUTPUT_DIR=/data/submission \
-  WEIGHTS="weights/model-a.pt weights/model-b.pt" \
+  WEIGHTS="/data/weights/model-a.pt /data/weights/model-b.pt" \
   RGB_SUFFIX=png \
   GPUS=1
 ```
 
-The default `WEIGHTS` value points to the two local fold-1 checkpoints; pass `WEIGHTS` explicitly on a clean checkout. `make predict` also accepts `BATCH_SIZE`, `DOWNSAMPLE`, `UNIT`, `TILE_SIZE`, `COMPRESS`, and `MASTER_PORT`. For example, use `TILE_SIZE=1024` to reduce GPU memory usage or `COMPRESS=false` to skip post-processing.
+По умолчанию `make predict` также принимает `BATCH_SIZE`, `DOWNSAMPLE`, `UNIT`, `TILE_SIZE`, `COMPRESS` и `MASTER_PORT`. Например, `TILE_SIZE=1024` уменьшает потребление памяти GPU, а `COMPRESS=false` отключает постобработку и упаковку.
 
-The same options can be passed directly to the wrapper:
+Те же параметры можно передать непосредственно в `predict.sh`:
 
 ```shell
 ./predict.sh \
-  --weights /models/model-a.pt /models/model-b.pt \
+  --weights /data/weights/model-a.pt /data/weights/model-b.pt \
   --input-dir /data/images \
   --output-dir /data/submission \
   --rgb-suffix png \
@@ -80,40 +57,61 @@ The same options can be passed directly to the wrapper:
   --tile-size 2048
 ```
 
-## Training
+Если используются локальные веса с именами из репозитория, можно указать их путём:
 
-I used a workstation with 4xRTX A6000 during training. With some changes it can be easily trained on 2x RTX 3090 cards.
-A bash script that runs all steps required to produce two fully trained models
 ```shell
-    ./train.sh <data_dir> <w_data_dir> <num_gpus>
-    # data dir is dir inside container that contains train dataset (mounted during docker run)
-    # w_data_dir is used to save converted tif files for training
-    # num_gpus - number of gpus used for training
-``` 
-An example 
-```shell
-./train.sh /data/train /data/train_tiffs 4 
+make predict \
+  DATA_DIR=images2 \
+  OUTPUT_DIR=submission \
+  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
+  RGB_SUFFIX=png \
+  GPUS=1 \
+  TILE_SIZE=2048 \
+  COMPRESS=true
 ```
 
-Under the hood it 
-- converts AGL to meters, similar to baseline approach but without downsampling. The images will be saved to `/data/train_tiffs`
-- trains 100 epochs of first train val split (fold) a smaller crop size (896x896)
-- fine tunes 75 epochs with larger crop size
-- repeats this procedure for another fold
-Text logs and tensorboard logs are stored under `logs/` dir in container's working directory
+## Обучение
 
-Parameters used for training can be found in `dist_train.sh` and `dist_train_tune.sh` scripts
+Для обучения используются скрипты `dist_train.sh` и `dist_train_tune.sh`. `train.sh` объединяет подготовку TIFF-файлов и два запуска обучения:
 
-## Testing
+```shell
+./train.sh /data/train /data/train_tiffs 4
+```
 
-To run prediction build and run docker image as described above.
+Аргументы `train.sh`:
 
-`test.sh` script will run prediction  and generate `submission_compressed.tar.gz` in working directory. 
+- `data_dir` — каталог с исходным тренировочным набором;
+- `w_data_dir` — каталог для преобразованных TIFF-файлов;
+- `num_gpus` — количество GPU для обучения.
 
-`./test.sh <test_dir> <num_gpus>`
+Первый запуск использует конфигурацию `configs/v2l.json` и размер crop `896x896`, второй — `configs/v2l_tune.json` и размер crop `1792x1792`. Количество эпох и параметры оптимизатора задаются в этих конфигурациях. Текущий сценарий `train.sh` запускает fold 1; запуск второго fold отключён.
 
+Текстовые логи и логи TensorBoard сохраняются в каталоге `logs/`. Перед запуском обучения убедитесь, что этот каталог существует.
 
-Assuming that challenge's dataset is mounted to `/data` directory and test images are extracted to `/data/test` and there are 2 gpus, the command is
-`./test.sh /data/test 2`. Prediction works conventional GPUs like 1080 Ti and requires around 10g of GPU memory. 
+## Проверка на тестовом наборе
 
-Output file is around 5gb, it could be copied to mounted host file system.
+Для предсказания используйте те же команды, что и для обычного запуска:
+
+```shell
+make predict \
+  DATA_DIR=/data/test \
+  OUTPUT_DIR=/data/submission \
+  WEIGHTS="/data/weights/model-a.pt /data/weights/model-b.pt" \
+  GPUS=1
+```
+
+Параметры `GPUS` и `TILE_SIZE` позволяют адаптировать запуск к объёму доступной видеопамяти. Для обычных потребительских GPU может потребоваться уменьшить размер тайла.
+
+## Очистка
+
+Удалить собранные Cython-файлы и временные артефакты сборки:
+
+```shell
+make clean
+```
+
+Удалить виртуальное окружение:
+
+```shell
+make clean-venv
+```
