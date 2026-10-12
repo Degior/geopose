@@ -55,8 +55,15 @@ venv: $(VENV_PYTHON)
 
 $(INSTALL_STAMP): $(REQS) $(VENV_PYTHON)
 	@test -f "$(REQS)" || { printf 'requirements file not found: %s\n' "$(REQS)"; exit 1; }
+
 	@"$(VENV_PYTHON)" -m pip install --upgrade pip
-	@"$(VENV_PYTHON)" -m pip install --extra-index-url "$(PIP_EXTRA_INDEX_URL)" -r "$(REQS)"
+	@"$(VENV_PYTHON)" -m pip install "setuptools<58" wheel numpy
+
+	@"$(VENV_PYTHON)" -m pip install \
+		--no-build-isolation \
+		--extra-index-url "$(PIP_EXTRA_INDEX_URL)" \
+		-r "$(REQS)"
+
 	@touch "$@"
 
 install: $(INSTALL_STAMP)

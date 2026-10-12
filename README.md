@@ -4,6 +4,22 @@
 
 Решение в основном основано на [статье CVPR EarthVision 2021](https://arxiv.org/abs/2105.08229) и [статье CVPR 2020](http://openaccess.thecvf.com/content_CVPR_2020/papers/Christie_Learning_Geocentric_Object_Pose_in_Oblique_Monocular_Images_CVPR_2020_paper.pdf).
 
+## TLDR
+### Подоготовка
+```shell
+make all
+```
+### Веса
+```shell
+mkdir -p weights
+
+wget -O weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 \
+  "https://www.dropbox.com/s/0uplf7b5d502ul2/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2?dl=1"
+
+wget -O weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2 \
+  "https://www.dropbox.com/s/54dhmlbdip23fif/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2?dl=1"
+```
+
 ## Требования
 
 Проект запускается локально в виртуальном окружении Python. По умолчанию используется Python 3.9, а для вычислений на GPU необходимы совместимые драйвер NVIDIA и CUDA.
