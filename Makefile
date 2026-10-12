@@ -8,7 +8,7 @@ BUILD_STAMP := $(VENV)/.cython-built
 
 DATA_DIR ?= images2
 OUTPUT_DIR ?= submission
-WEIGHTS ?= weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1
+WEIGHTS ?= weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2
 GPUS ?= 1
 MASTER_PORT ?= 29500
 RGB_SUFFIX ?= png
@@ -57,7 +57,7 @@ $(INSTALL_STAMP): $(REQS) $(VENV_PYTHON)
 	@test -f "$(REQS)" || { printf 'requirements file not found: %s\n' "$(REQS)"; exit 1; }
 
 	@"$(VENV_PYTHON)" -m pip install --upgrade pip
-	@"$(VENV_PYTHON)" -m pip install "setuptools<58" wheel numpy
+	@"$(VENV_PYTHON)" -m pip install "setuptools<58" wheel "numpy==1.26.4"
 
 	@"$(VENV_PYTHON)" -m pip install \
 		--no-build-isolation \

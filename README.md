@@ -5,7 +5,7 @@
 Решение в основном основано на [статье CVPR EarthVision 2021](https://arxiv.org/abs/2105.08229) и [статье CVPR 2020](http://openaccess.thecvf.com/content_CVPR_2020/papers/Christie_Learning_Geocentric_Object_Pose_in_Oblique_Monocular_Images_CVPR_2020_paper.pdf).
 
 ## TLDR
-### Подоготовка
+### Подготовка
 ```shell
 make all
 ```
@@ -19,6 +19,8 @@ wget -O weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 \
 wget -O weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2 \
   "https://www.dropbox.com/s/54dhmlbdip23fif/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2?dl=1"
 ```
+
+Эти два файла используются по умолчанию в `make predict` и `make predict-cluster`. После скачивания весов можно запускать предсказание без указания `WEIGHTS`.
 
 ## Требования
 
@@ -48,13 +50,13 @@ make build
 
 Каталог с входными данными должен содержать изображения с именами `*_RGB.png` по умолчанию. В выходной каталог для каждого изображения сохраняются файлы `_AGL.tif` и `_VFLOW.json`; при включённом сжатии также создаётся отдельный каталог с конвертированными и сжатыми результатами.
 
-Веса не входят в репозиторий, поэтому передайте пути к ним явно:
+Перед запуском скачайте веса из раздела TLDR. Makefile по умолчанию использует `weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2` и `weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2`. Их также можно указать явно через `WEIGHTS`:
 
 ```shell
 make predict \
   DATA_DIR=/data/images \
   OUTPUT_DIR=/data/submission \
-  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
+  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2" \
   RGB_SUFFIX=png \
   GPUS=1
 ```
@@ -65,21 +67,20 @@ make predict \
 
 ```shell
 ./predict.sh \
-  --weights weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1 \
-  --input-dir /data/images \
-  --output-dir /data/submission \
+  --model-path weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2 \
+  --dataset-dir /data/images \
+  --predictions-dir /data/submission \
   --rgb-suffix png \
   --gpus 1 \
   --tile-size 2048
 ```
 
-Если используются локальные веса с именами из репозитория, можно указать их путём:
+Для весов, скачанных по командам из TLDR, достаточно запуска с параметрами по умолчанию:
 
 ```shell
 make predict \
   DATA_DIR=images2 \
   OUTPUT_DIR=submission \
-  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
   RGB_SUFFIX=png \
   GPUS=1 \
   TILE_SIZE=2048 \
@@ -90,13 +91,13 @@ make predict \
 
 Команда `make predict-cluster` собирает Cython-расширение, создаёт каталог логов и отправляет задание через `sbatch`. По умолчанию используются текущие параметры кластера: partition `hiperf`, узел `tesla-a100`, 8 GPU, 10 CPU и 40 ГБ памяти. Перед отправкой убедитесь, что `sbatch` доступен, а исходный код и виртуальное окружение находятся на общей файловой системе.
 
-Если веса уже находятся в локальном каталоге `weights/`, пример запуска выглядит так:
+Если веса из TLDR уже находятся в локальном каталоге `weights/`, пример запуска выглядит так:
 
 ```shell
 make predict-cluster \
   DATA_DIR=images2 \
   OUTPUT_DIR=submission \
-  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
+  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2" \
   CLUSTER_PARTITION=hiperf \
   CLUSTER_NODE=tesla-a100 \
   CLUSTER_GPUS=8
@@ -130,7 +131,7 @@ make predict-cluster \
 make predict \
   DATA_DIR=/data/test \
   OUTPUT_DIR=/data/submission \
-  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
+  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2" \
   GPUS=1
 ```
 
