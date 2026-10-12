@@ -19,8 +19,17 @@ wget -O weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 \
 wget -O weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2 \
   "https://www.dropbox.com/s/54dhmlbdip23fif/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2?dl=1"
 ```
-
 Эти два файла используются по умолчанию в `make predict` и `make predict-cluster`. После скачивания весов можно запускать предсказание без указания `WEIGHTS`.
+### Предсказание
+```shell
+make predict \
+  DATA_DIR=images2 \
+  OUTPUT_DIR=submission \
+  RGB_SUFFIX=png \
+  GPUS=1 \
+  TILE_SIZE=2048 \
+  COMPRESS=true
+```
 
 ## Требования
 
@@ -73,18 +82,6 @@ make predict \
   --rgb-suffix png \
   --gpus 1 \
   --tile-size 2048
-```
-
-Для весов, скачанных по командам из TLDR, достаточно запуска с параметрами по умолчанию:
-
-```shell
-make predict \
-  DATA_DIR=images2 \
-  OUTPUT_DIR=submission \
-  RGB_SUFFIX=png \
-  GPUS=1 \
-  TILE_SIZE=2048 \
-  COMPRESS=true
 ```
 
 ## Предсказание на Slurm-кластере
