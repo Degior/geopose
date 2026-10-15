@@ -55,7 +55,7 @@ make predict-cluster \
   WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
   CLUSTER_PARTITION=hiperf \
   CLUSTER_NODE=tesla-a100 \
-  CLUSTER_GPUS=8
+  CLUSTER_GPUS=1
 ```
 
 Команда использует Slurm и запускает prediction с общей файловой системы. Параметры `CLUSTER_GPUS`, `CLUSTER_NODE`, `CLUSTER_PARTITION`, `CLUSTER_CPUS`, `CLUSTER_MEMORY` и `CLUSTER_TIME` можно переопределить непосредственно в команде.

@@ -86,7 +86,7 @@ make predict \
 
 ## Предсказание на Slurm-кластере
 
-Команда `make predict-cluster` собирает Cython-расширение, создаёт каталог логов и отправляет задание через `sbatch`. По умолчанию используются текущие параметры кластера: partition `hiperf`, узел `tesla-a100`, 8 GPU, 8 CPU и 40 ГБ памяти. Перед отправкой убедитесь, что `sbatch` доступен, а исходный код и виртуальное окружение находятся на общей файловой системе.
+Команда `make predict-cluster` собирает Cython-расширение, создаёт каталог логов и отправляет задание через `sbatch`. По умолчанию используются текущие параметры кластера: partition `hiperf`, узел `tesla-a100`, 1 GPU, 8 CPU и 40 ГБ памяти. Перед отправкой убедитесь, что `sbatch` доступен, а исходный код и виртуальное окружение находятся на общей файловой системе.
 
 Если веса из TLDR уже находятся в локальном каталоге `weights/`, пример запуска выглядит так:
 
@@ -97,7 +97,7 @@ make predict-cluster \
   WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2" \
   CLUSTER_PARTITION=hiperf \
   CLUSTER_NODE=tesla-a100 \
-  CLUSTER_GPUS=8
+  CLUSTER_GPUS=1
 ```
 
 Параметры кластера можно изменить через `CLUSTER_NODES`, `CLUSTER_CPUS`, `CLUSTER_MEMORY`, `CLUSTER_TIME`, `CLUSTER_JOB_NAME`, `CLUSTER_LOG_DIR`, `CLUSTER_GRES` и `CLUSTER_CUDA_DEVICES`. Значение `CLUSTER_GPUS` должно совпадать с числом GPU, доступным заданию. Если кластер использует другой тип ресурса GPU, передайте его через `CLUSTER_GRES`.
