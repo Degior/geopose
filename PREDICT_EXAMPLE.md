@@ -22,7 +22,7 @@ make build
 make predict \
   DATA_DIR=images2 \
   OUTPUT_DIR=submission \
-  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
+  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2" \
   RGB_SUFFIX=png \
   GPUS=1 \
   TILE_SIZE=2048 \
@@ -37,7 +37,7 @@ make predict \
 make predict \
   DATA_DIR=/data/images \
   OUTPUT_DIR=/data/submission \
-  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
+  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2" \
   RGB_SUFFIX=png \
   GPUS=1
 ```
@@ -52,7 +52,7 @@ make predict \
 make predict-cluster \
   DATA_DIR=images2 \
   OUTPUT_DIR=submission \
-  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1" \
+  WEIGHTS="weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2" \
   CLUSTER_PARTITION=hiperf \
   CLUSTER_NODE=tesla-a100 \
   CLUSTER_GPUS=1
@@ -66,7 +66,7 @@ make predict-cluster \
 
 ```shell
 ./predict.sh \
-  --weights weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1 \
+  --weights weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2 \
   --input-dir /data/images \
   --output-dir /data/submission \
   --rgb-suffix png \

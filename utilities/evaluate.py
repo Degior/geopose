@@ -97,7 +97,7 @@ def get_current_metrics(item, args):
     # get arguments
     vflow_gt_path, agl_gt_path, vflow_pred_path, aglpred_path, rgb_path, args = item
     # load AGL, SCALE, and ANGLE predicted values
-    agl_pred = load_image(aglpred_path, args)  # * 100?
+    agl_pred = load_image(aglpred_path, args) * 100
     if agl_pred is None:
         return None
     vflow_items = load_vflow(

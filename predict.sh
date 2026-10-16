@@ -38,8 +38,8 @@ if [[ -n "${WEIGHTS:-}" ]]; then
     read -r -a DEFAULT_WEIGHTS <<< "$WEIGHTS"
 else
     DEFAULT_WEIGHTS=(
-        weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last
-        weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1
+        weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2
+        weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2
     )
 fi
 

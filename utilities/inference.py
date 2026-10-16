@@ -187,7 +187,6 @@ def test(args):
         predictions_dir = Path(args.predictions_dir)
         for images, rgb_paths in tqdm(test_loader):
             images = images.float().cuda()
-            images = images[:,:,:,3]
             # print(images)
             pred = predict_tta(models, images)
             # print("pred", pred)

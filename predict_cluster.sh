@@ -19,7 +19,7 @@ SBATCH_BIN="${SBATCH_BIN:-sbatch}"
 
 DATA_DIR="${DATA_DIR:-images2}"
 OUTPUT_DIR="${OUTPUT_DIR:-submission}"
-WEIGHTS="${WEIGHTS:-weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_1_last_1}"
+WEIGHTS="${WEIGHTS:-weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_5_r2 weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_6_r2}"
 RGB_SUFFIX="${RGB_SUFFIX:-png}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 DOWNSAMPLE="${DOWNSAMPLE:-1}"

@@ -5,7 +5,7 @@ import torch.hub
 from torch.nn import Dropout2d, UpsamplingBilinear2d, AdaptiveAvgPool2d
 from torch.utils import model_zoo
 
-from utilities.unet_vflow import EncoderRegressionHead, RegressionHead, ScaleHead, SegmentationHead
+from utilities.unet_vflow import EncoderRegressionHead, RegressionHead, ScaleHead
 
 encoder_params = {
     "tf_efficientnetv2_l_in21k": {
@@ -114,10 +114,6 @@ class AbstractModel(nn.Module):
 
 class TimmUnet(AbstractModel):
     def __init__(self, encoder='resnet34', use_last_decoder=True, **kwargs):
-        self.segm_last_upsample = None
-        self.segm_decoder_stages = None
-        self.segm_bottlenecks = None
-        self.segm_head = None
         if not hasattr(self, 'first_layer_stride_two'):
             self.first_layer_stride_two = True
         if not hasattr(self, 'decoder_block'):
@@ -147,7 +143,6 @@ class TimmUnet(AbstractModel):
                                                            self.last_upsample_filters)
             else:
                 self.last_upsample = UpsamplingBilinear2d(scale_factor=2)
-
         self.xydir_head = EncoderRegressionHead(
             in_channels=self.filters[-1],
             out_channels=2,
@@ -173,51 +168,28 @@ class TimmUnet(AbstractModel):
         self.dropout = Dropout2d(p=0.0)
         self.encoder = backbone
 
-    def add_segm_head(self, use_last_decoder=True):
-        return
-        self.segm_head = SegmentationHead(
-            in_channels=self.last_upsample_filters,
-            out_channels=1,
-            kernel_size=3,
-        )
-
-        self.segm_bottlenecks = nn.ModuleList([self.bottleneck_type(self.filters[-i - 2] + f, f) for i, f in
-                                          enumerate(reversed(self.decoder_filters[:]))])
-
-        self.segm_decoder_stages = nn.ModuleList([self.get_decoder(idx) for idx in range(0, len(self.decoder_filters))])
-
-        if self.first_layer_stride_two:
-            if use_last_decoder:
-                self.segm_last_upsample = UnetDecoderBlock2Conv(self.decoder_filters[0], self.last_upsample_filters,
-                                                           self.last_upsample_filters)
-            else:
-                self.segm_last_upsample = UpsamplingBilinear2d(scale_factor=2)
-
-
     # noinspection PyCallingNonCallable
     def forward(self, x, city=None, **kwargs):
         # Encoder
         x = x.contiguous(memory_format=torch.channels_last)
         enc_results = self.encoder(x)
         x = enc_results[-1]
-
-        dec_x = x
         bottlenecks = self.bottlenecks
         for idx, bottleneck in enumerate(bottlenecks):
             rev_idx = - (idx + 1)
-            dec_x = self.decoder_stages[rev_idx](dec_x)
-            dec_x = bottleneck(dec_x, enc_results[rev_idx - 1])
+            x = self.decoder_stages[rev_idx](x)
+            x = bottleneck(x, enc_results[rev_idx - 1])
         xydir = self.xydir_head(enc_results[-1])
-        dec_x = self.last_upsample(dec_x)
+        x = self.last_upsample(x)
 
-        decoder_output = dec_x
+        decoder_output = x
         height = self.height_head(decoder_output).contiguous(memory_format=torch.contiguous_format)
         mag = self.mag_head(decoder_output).contiguous(memory_format=torch.contiguous_format)
         scale = self.scale_head(mag, height)
         if scale.ndim == 0:
             scale = torch.unsqueeze(scale, axis=0)
 
-        return {"xydir": xydir, "height": height, "mag": mag, "scale": scale, "segm": None}
+        return {"xydir": xydir, "height": height, "mag": mag, "scale": scale}
 
     def get_decoder(self, layer):
         in_channels = self.filters[layer + 1] if layer + 1 == len(self.decoder_filters) else self.decoder_filters[
@@ -298,7 +270,6 @@ class UnetDecoderBlock2Conv(nn.Module):
 
     def forward(self, x):
         return self.layer(x)
-
 
 class TimmUnetFeat(TimmUnet):
 
