@@ -15,11 +15,24 @@ if [[ -z "${PYTHON:-}" ]]; then
 fi
 export PYTHON
 export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
-mkdir -p logs weights "$WDATA_DIR"
+[[ -d "$DATA_DIR" ]] || { printf 'input directory not found: %s\n' "$DATA_DIR" >&2; exit 1; }
 
-echo 'Convert images'
-"$PYTHON" utilities/downsample_images.py --indir "$DATA_DIR" --outdir "$WDATA_DIR" \
-    --rgb-suffix "${TRAIN_RGB_SUFFIX:-j2k}"
+echo 'Check training dependencies'
+if ! "$PYTHON" -c 'from training.train_segmentor import main'; then
+    printf 'Training dependencies could not be imported. Install requirements.txt with this Python: %s\n' "$PYTHON" >&2
+    exit 1
+fi
+
+mkdir -p logs weights
+if [[ "${SKIP_PREPARE:-0}" == 1 ]]; then
+    [[ -d "$WDATA_DIR" ]] || { printf 'prepared directory not found: %s\n' "$WDATA_DIR" >&2; exit 1; }
+    printf 'Use prepared images: %s\n' "$WDATA_DIR"
+else
+    mkdir -p "$WDATA_DIR"
+    echo 'Convert images'
+    "$PYTHON" utilities/downsample_images.py --indir "$DATA_DIR" --outdir "$WDATA_DIR" \
+        --rgb-suffix "${TRAIN_RGB_SUFFIX:-j2k}"
+fi
 
 echo 'Start training'
 for fold in 5 6; do
