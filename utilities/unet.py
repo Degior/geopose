@@ -113,7 +113,7 @@ class AbstractModel(nn.Module):
 
 
 class TimmUnet(AbstractModel):
-    def __init__(self, encoder='resnet34', use_last_decoder=True, **kwargs):
+    def __init__(self, encoder='resnet34', use_last_decoder=True, pretrained=True, **kwargs):
         if not hasattr(self, 'first_layer_stride_two'):
             self.first_layer_stride_two = True
         if not hasattr(self, 'decoder_block'):
@@ -122,7 +122,7 @@ class TimmUnet(AbstractModel):
             self.bottleneck_type = ConvBottleneck
 
         backbone_arch = encoder
-        backbone = timm.create_model(backbone_arch.replace("_fat", ""), features_only=True, pretrained=True, **kwargs)
+        backbone = timm.create_model(backbone_arch.replace("_fat", ""), features_only=True, pretrained=pretrained, **kwargs)
         self.filters = [f["num_chs"] for f in backbone.feature_info]
         self.decoder_filters = default_decoder_filters
         self.last_upsample_filters = default_last
