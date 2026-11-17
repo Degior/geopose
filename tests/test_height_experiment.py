@@ -30,13 +30,32 @@ def test_exact_size_crop_needs_no_margin():
     assert choose_crop(np.zeros((32, 32)), 32) == (0, 0)
 
 
-def test_crop_enforces_coverage_and_rejects_infinity():
+def test_crop_enforces_minimum_valid_pixels_and_rejects_infinity():
     target = np.zeros((32, 32))
     target[:20] = np.inf
     with pytest.raises(ValueError, match="No valid crop"):
         choose_crop(target, 32, min_valid_fraction=0.5)
     with pytest.raises(ValueError, match="Cannot take"):
         choose_crop(target, 33)
+
+
+def test_crop_falls_back_to_best_attempt_when_preferred_coverage_is_impossible():
+    target = np.full((64, 128), np.nan)
+    target[:25, :64] = 0
+    target[:30, 64:] = 0
+    assert choose_crop(target, 64, min_valid_fraction=0.5, attempts=2,
+                       rng=Coordinates([0, 0, 0, 64])) == (0, 64)
+
+
+def test_reported_1792_crop_with_42_percent_coverage_is_usable():
+    target = np.full((1792, 1792), np.nan, dtype=np.float32)
+    target.flat[:1352268] = 0
+    assert choose_crop(target, 1792, min_valid_fraction=0.5) == (0, 0)
+
+
+def test_no_fallback_to_all_nodata_crop():
+    with pytest.raises(ValueError, match="hard minimum 1024"):
+        choose_crop(np.full((64, 64), np.nan), 64, min_valid_fraction=0.5)
 
 
 def make_args(tmp_path, run_id="test-huber", no_huber=False):

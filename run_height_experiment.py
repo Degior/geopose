@@ -121,6 +121,7 @@ def prepare(args):
                 "cpus": cpus, "batch_per_gpu": batch, "global_batch": batch * args.gpus,
                 "steps_per_epoch": steps, "scheduler_steps": steps * epochs,
                 "min_valid_fraction": args.min_valid_fraction,
+                "crop_coverage_policy": "prefer fraction, otherwise best of 10 with at least 1024 finite pixels",
                 "weights": str(weights), "command": command, "sbatch": sbatch}
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return stage, manifest, command, sbatch
@@ -141,7 +142,8 @@ def main():
     parser.add_argument("--partition", default="hiperf")
     parser.add_argument("--node", help="Optional; otherwise Slurm chooses a node with enough GPUs")
     parser.add_argument("--time", default="20:00:00")
-    parser.add_argument("--min-valid-fraction", type=float, default=0.5)
+    parser.add_argument("--min-valid-fraction", type=float, default=0.5,
+                        help="Preferred crop coverage; fall back to best of 10 with at least 1024 finite pixels")
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--no-huber", action="store_true", help="Prepare an otherwise identical control run")
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "weights/experiments")

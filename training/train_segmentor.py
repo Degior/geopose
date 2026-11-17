@@ -144,7 +144,8 @@ def parse_args():
     arg('--freeze-epochs', type=int, default=0)
     arg('--crop', type=int, default=1024)
     arg('--multiplier', type=int, default=1)
-    arg('--min-valid-fraction', type=float, default=0.0)
+    arg('--min-valid-fraction', type=float, default=0.0,
+        help='Preferred valid crop fraction; best usable attempt is used if it cannot be reached')
     arg('--auto-schedule', action='store_true')
 
     args = parser.parse_args()
