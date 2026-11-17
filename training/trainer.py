@@ -34,7 +34,7 @@ class TrainConfiguration:
     freeze_epochs: int = 0,
     test_every: int = 1
     world_size: int = 1
-    output_dir: str = "./weights"
+    output_dir: str = "weights"
     prefix: str = ""
     resume_checkpoint: str = None
     workers: int = 8
@@ -71,7 +71,6 @@ class PytorchTrainer(ABC):
                  fold: int,
                  train_data: Dataset,
                  val_data: Dataset) -> None:
-        print("init pytorch trainer")
         super().__init__()
         self.fold = fold
         self.train_config = train_config
@@ -90,7 +89,6 @@ class PytorchTrainer(ABC):
         self.summary_writer = SummaryWriter(os.path.join(train_config.log_dir,  self.snapshot_name))
 
     def fit(self):
-        print("fit pytorch trainer")
         for epoch in range(self.current_epoch, self.conf["optimizer"]["schedule"]["epochs"]):
             self.current_epoch = epoch
             self.model.train()
@@ -121,7 +119,6 @@ class PytorchTrainer(ABC):
         }, os.path.join(self.train_config.output_dir, self.snapshot_name + "_last"))
 
     def _save_best(self, improved_metrics: Dict):
-        print("__save_best pytorch trainer")
         self.model = self.model.eval()
         for metric_name in improved_metrics.keys():
             torch.save({
@@ -139,11 +136,12 @@ class PytorchTrainer(ABC):
             if loss_def.display:
                 avg_meters[loss_def.name] = AverageMeter()
 
+        if self.conf["optimizer"]["schedule"]["mode"] == "epoch":
+            self.scheduler.step(self.current_epoch)
         for i, sample in enumerate(iterator):
             # todo: make configurable
             imgs = sample["image"].cuda().float()
             self.optimizer.zero_grad()
-            
             with torch.cuda.amp.autocast():
                 output = self.model(imgs)
                 total_loss = 0
@@ -152,43 +150,21 @@ class PytorchTrainer(ABC):
                     if loss_def.display:
                         avg_meters[loss_def.name].update(l.item(), imgs.size(0))
                     total_loss += loss_def.weight * l
-            
-            if torch.isnan(total_loss) or torch.isinf(total_loss):
-                print(f"Lose batch {i} because NaN/Inf in total_loss")
-                continue
-            
             loss_meter.update(total_loss.item(), imgs.size(0))
             avg_metrics = {k: v.avg for k, v in avg_meters.items()}
-            
-            current_lr = float(self.scheduler.get_last_lr()[-1]) if hasattr(self.scheduler, 'get_last_lr') else float(self.scheduler.get_lr()[-1])
-            
-            iterator.set_postfix({
-                "lr": current_lr,
-                "epoch": self.current_epoch,
-                **avg_metrics
-            })
-            
+            iterator.set_postfix({"lr": float(self.scheduler.get_lr()[-1]),
+                                  "epoch": self.current_epoch,
+                                  **avg_metrics
+                                  })
             self.gscaler.scale(total_loss).backward()
             self.gscaler.unscale_(self.optimizer)
-            
-            grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3, error_if_nonfinite=False)
-            
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.gscaler.step(self.optimizer)
             self.gscaler.update()
-            
-            schedule_mode = self.conf["optimizer"]["schedule"]["mode"]
-            if schedule_mode == "step":
-                self.scheduler.step()
-            elif schedule_mode == "poly":
-                current_step = i + self.current_epoch * len(loader)
-                self.scheduler.step(current_step)
-            
             torch.cuda.synchronize()
             dist.barrier()
-        
-        if self.conf["optimizer"]["schedule"]["mode"] == "epoch":
-            self.scheduler.step()
-        
+            if self.conf["optimizer"]["schedule"]["mode"] in ("step", "poly"):
+                self.scheduler.step(i + self.current_epoch * len(loader))
         if self.train_config.local_rank == 0:
             for idx, param_group in enumerate(self.optimizer.param_groups):
                 lr = param_group['lr']
@@ -214,26 +190,8 @@ class PytorchTrainer(ABC):
                                        num_workers=self.train_config.workers,
                                        shuffle=train_sampler is None, sampler=train_sampler, pin_memory=False,
                                        drop_last=True)
-        print(f'train_data_loader len: {len(train_data_loader)}, batch size: {self.train_batch_size}')
-        
-        #print('Vse ok with data: ', self.check_data_sanity(train_data_loader))
 
         return train_data_loader
-        
-    def check_data_sanity(self, loader):
-        for i, sample in enumerate(loader):
-            imgs = sample["image"].float()
-            
-            if torch.isnan(imgs).any():
-                print(f"NaN in data: batch {i}")
-                return False
-            if torch.isinf(imgs).any():
-                print(f"Inf in data: batch {i}")
-                return False
-                
-            print(f"Batch {i}: min={imgs.min():.4f}, max={imgs.max():.4f}, mean={imgs.mean():.4f}")
-            
-        return True
 
     def get_val_loader(self) -> DataLoader:
         val_sampler = None
@@ -328,9 +286,6 @@ class PytorchTrainer(ABC):
         model = unet.__dict__[self.conf['network']](**self.conf["encoder_params"])
         model = model.cuda()
         self._load_checkpoint(model)
-        model.add_segm_head()
-        # added segm_head to cuda
-        model = model.cuda()
 
         if self.train_config.distributed:
             model = SyncBatchNorm.convert_sync_batchnorm(model, self.pg)

@@ -98,7 +98,7 @@ class GeoposeEvaluator(Evaluator):
             e_args.truth_dir = self.args.train_dir
             e_args.predictions_dir = "preds"
             e_args.output_dir = "output"
-            e_args.num_processes = os.cpu_count()
+            e_args.num_processes = int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1))
             res = {"r2": evaluate_r2(e_args)}
         dist.barrier()
         torch.cuda.empty_cache()
@@ -120,7 +120,7 @@ def parse_args():
     arg('--config', metavar='CONFIG_FILE', help='path to configuration file', default="configs/b3.json")
     arg('--workers', type=int, default=16, help='number of cpu threads to use')
     arg('--gpu', type=str, default='0', help='List of GPUs for parallel training, e.g. 0,1,2,3')
-    arg('--output-dir', type=str, default='./weights')
+    arg('--output-dir', type=str, default='weights/')
     arg('--resume', type=str, default='')
     arg('--fold', type=int, default=0)
     arg('--prefix', type=str, default='')
@@ -128,13 +128,13 @@ def parse_args():
     arg('--data-dir', type=str, default="/wdata/train/")
     arg('--train-dir', type=str, default="/mnt/sota/datasets/geopose/train/")
     arg('--preds-dir', type=str, default="/preds/")
-    arg('--folds-csv', type=str, default='folds_all.csv')
+    arg('--folds-csv', type=str, default='folds.csv')
     arg('--logdir', type=str, default='logs')
     arg('--zero-score', action='store_true', default=False)
     arg('--from-zero', action='store_true', default=False)
     arg('--distributed', action='store_true', default=False)
-    arg("--local_rank", default=0, type=int)
-    arg("--world-size", default=1, type=int)
+    arg("--local_rank", "--local-rank", default=int(os.environ.get("LOCAL_RANK", "0")), type=int)
+    arg("--world-size", default=int(os.environ.get("WORLD_SIZE", "1")), type=int)
     arg("--test_every", type=int, default=1)
     arg('--freeze-epochs', type=int, default=0)
     arg('--crop', type=int, default=1024)
@@ -146,11 +146,8 @@ def parse_args():
 
 
 def create_data_datasets(args):
-    print("Start create train dataset")
-    print(f'train dataset dir: {args.data_dir}')
     train_dataset = GeoposeDataset(mode="train", dataset_dir=args.data_dir, folds_csv=args.folds_csv, fold=args.fold,
-                                       crop_size=args.crop, multiplier=args.multiplier)
-    print("Start create val dataset")
+                                   crop_size=args.crop, multiplier=args.multiplier)
     val_dataset = GeoposeDataset(mode="val", dataset_dir=args.data_dir, folds_csv=args.folds_csv, fold=args.fold,
                                  crop_size=args.crop)
     if args.city:
@@ -161,6 +158,8 @@ def create_data_datasets(args):
 
 def main():
     args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.logdir, exist_ok=True)
     trainer_config = TrainConfiguration(
         config_path=args.config,
         gpu=args.gpu,
@@ -178,7 +177,6 @@ def main():
         zero_score=args.zero_score
     )
 
-    print("Starting create data datasets")
     data_train, data_val = create_data_datasets(args)
     seg_evaluator = GeoposeEvaluator(args)
     trainer = PytorchTrainer(train_config=trainer_config, evaluator=seg_evaluator, fold=args.fold,
@@ -186,9 +184,9 @@ def main():
     try:
         trainer.fit()
     except:
-        print("exception!")
         traceback.print_exc()
         dist.destroy_process_group()
+        raise
 
 
 if __name__ == '__main__':

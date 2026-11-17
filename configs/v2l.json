@@ -5,15 +5,15 @@
     "drop_path_rate": 0.2
   },
   "optimizer": {
-        "train_bs": 1,
-        "val_bs": 1,
+        "train_bs": 4,
+        "val_bs": 2,
         "type": "AdamW",
         "weight_decay": 1e-2,
-        "learning_rate": 0.00001,
+        "learning_rate": 0.0001,
         "schedule": {
             "type": "cosine",
             "mode": "step",
-            "epochs": 8,
+            "epochs": 100,
             "params": {
                 "T_max": 133000,
                 "eta_min": 5e-6
@@ -68,16 +68,7 @@
         "display": true,
         "params": {
         }
-      },
-     {
-       "name": "dice",
-       "type": "DiceLossCalculator",
-       "weight": 0.05,
-       "display": true,
-       "params": {
-
-       }
-     }
+      }
 
    ]
 
