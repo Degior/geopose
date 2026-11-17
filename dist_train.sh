@@ -7,6 +7,7 @@ DATA="${1:?Usage: dist_train.sh DATA_DIR WDATA_DIR FOLD GPUS}"
 WDATA="${2:?WDATA_DIR is required}"
 FOLD="${3:?FOLD is required}"
 GPUS="${4:-1}"
+RUN_ID="${RUN_ID:-base-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 PYTHON_BIN="${PYTHON:-python}"
 if [[ -z "${PYTHON:-}" && -x "$ROOT_DIR/.venv/bin/python" ]]; then
     PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
@@ -19,6 +20,8 @@ export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
  --world-size $GPUS  \
  --distributed \
  --config configs/v2l.json \
+ --run-id "$RUN_ID" --stage base \
+ --auto-schedule \
  --workers 8 \
  --multiplier 4 \
  --data-dir "$WDATA" \

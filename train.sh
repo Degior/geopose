@@ -6,6 +6,8 @@ cd "$ROOT_DIR"
 DATA_DIR="${1:?Usage: train.sh DATA_DIR WDATA_DIR GPUS}"
 WDATA_DIR="${2:?WDATA_DIR is required}"
 GPUS="${3:-1}"
+export RUN_ID="${RUN_ID:-train-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+printf 'Run ID: %s\nWeights: weights/experiments/%s/\n' "$RUN_ID" "$RUN_ID"
 if [[ -z "${PYTHON:-}" ]]; then
     if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
         PYTHON="$ROOT_DIR/.venv/bin/python"
@@ -23,7 +25,7 @@ if ! "$PYTHON" -c 'from training.train_segmentor import main'; then
     exit 1
 fi
 
-mkdir -p logs weights
+mkdir -p "logs/$RUN_ID" weights
 if [[ "${SKIP_PREPARE:-0}" == 1 ]]; then
     [[ -d "$WDATA_DIR" ]] || { printf 'prepared directory not found: %s\n' "$WDATA_DIR" >&2; exit 1; }
     printf 'Use prepared images: %s\n' "$WDATA_DIR"
@@ -36,11 +38,9 @@ fi
 
 echo 'Start training'
 for fold in 5 6; do
-    if [[ -d preds ]]; then
-        rm -f -- preds/*_AGL.tif preds/*_VFLOW.json
-    fi
-    bash ./dist_train.sh "$DATA_DIR" "$WDATA_DIR" "$fold" "$GPUS" > "logs/l$fold" 2>&1
+    bash ./dist_train.sh "$DATA_DIR" "$WDATA_DIR" "$fold" "$GPUS" > "logs/$RUN_ID/base_$fold.log" 2>&1
     bash ./dist_train_tune.sh "$DATA_DIR" "$WDATA_DIR" "$fold" "$GPUS" \
-        "weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_${fold}_r2" >> "logs/l$fold" 2>&1
+        "weights/experiments/$RUN_ID/fold_${fold}/base/weights/folds_TimmUnet_tf_efficientnetv2_l_in21k_${fold}_r2" \
+        > "logs/$RUN_ID/tune_$fold.log" 2>&1
 done
 echo 'Done training'

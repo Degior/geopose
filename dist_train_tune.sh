@@ -8,6 +8,7 @@ WDATA="${2:?WDATA_DIR is required}"
 FOLD="${3:?FOLD is required}"
 GPUS="${4:-1}"
 RESUME="${5:?CHECKPOINT is required}"
+RUN_ID="${RUN_ID:-tune-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 [[ -s "$RESUME" ]] || { printf 'checkpoint not found: %s\n' "$RESUME" >&2; exit 1; }
 PYTHON_BIN="${PYTHON:-python}"
 if [[ -z "${PYTHON:-}" && -x "$ROOT_DIR/.venv/bin/python" ]]; then
@@ -21,6 +22,8 @@ export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
  --world-size $GPUS  \
  --distributed \
  --config configs/v2l_tune.json \
+ --run-id "$RUN_ID" --stage tune \
+ --auto-schedule \
  --workers 8 \
  --multiplier 1 \
  --data-dir "$WDATA" \

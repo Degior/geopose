@@ -2,6 +2,7 @@ import dataclasses
 import logging
 import os
 import re
+import math
 from abc import ABC, abstractmethod
 from typing import Dict, List
 
@@ -39,6 +40,7 @@ class TrainConfiguration:
     resume_checkpoint: str = None
     workers: int = 8
     log_dir: str = "logs"
+    auto_schedule: bool = False
 
 
 class Evaluator(ABC):
@@ -75,6 +77,15 @@ class PytorchTrainer(ABC):
         self.fold = fold
         self.train_config = train_config
         self.conf = load_config(train_config.config_path)
+        if train_config.auto_schedule:
+            schedule = self.conf['optimizer']['schedule']
+            if schedule['type'] != 'cosine' or schedule['mode'] != 'step':
+                raise ValueError('--auto-schedule requires cosine scheduling per step')
+            steps = math.ceil(len(train_data) / train_config.world_size) // self.conf['optimizer']['train_bs']
+            if steps < 1:
+                raise ValueError('Dataset is too small for this distributed batch')
+            schedule['params']['T_max'] = steps * schedule['epochs']
+            print('Computed cosine T_max:', schedule['params']['T_max'])
         self._init_distributed()
         self.evaluator = evaluator
         self.current_metrics = evaluator.init_metrics()
@@ -283,7 +294,10 @@ class PytorchTrainer(ABC):
     def _init_model(self):
         print(self.train_config)
 
-        model = unet.__dict__[self.conf['network']](**self.conf["encoder_params"])
+        encoder_params = dict(self.conf["encoder_params"])
+        if self.train_config.resume_checkpoint:
+            encoder_params['pretrained'] = False
+        model = unet.__dict__[self.conf['network']](**encoder_params)
         model = model.cuda()
         self._load_checkpoint(model)
 
