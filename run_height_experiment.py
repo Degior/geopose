@@ -35,6 +35,21 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def check_training_python(python):
+    # Keep the venv symlink: resolving it would select the system environment.
+    executable = str(python.absolute())
+    if not python.is_file():
+        raise FileNotFoundError(f"Training Python not found: {python}")
+    probe = subprocess.run(
+        [executable, "-c", "import sys, torch, torch.distributed.run; "
+         "print('Training Python:', sys.executable, '| prefix:', sys.prefix, '| torch:', torch.__version__)"],
+        text=True, capture_output=True,
+    )
+    if probe.returncode:
+        raise RuntimeError(f"Training environment check failed for {executable}:\n{probe.stderr}")
+    print(probe.stdout.strip(), flush=True)
+
+
 def prepare(args):
     checkpoint, data, truth, split = (path.resolve() for path in (
         args.checkpoint, args.data_dir, args.train_dir, args.folds_csv,
@@ -80,7 +95,7 @@ def prepare(args):
     weights.mkdir(parents=True)
     config_path = stage / "config.json"
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    command = [str(args.python.resolve()), "-u", "-m", "torch.distributed.run", "--standalone",
+    command = [str(args.python.absolute()), "-u", "-m", "torch.distributed.run", "--standalone",
                f"--nproc_per_node={args.gpus}", str(ROOT / "training/train_segmentor.py"),
                "--distributed", "--world-size", str(args.gpus), "--config", str(config_path),
                "--workers", str(args.workers), "--data-dir", str(data), "--train-dir", str(truth),
@@ -140,6 +155,8 @@ def main():
         parser.error("GPU, worker and epoch counts must be positive")
     if not 0 <= args.min_valid_fraction <= 1:
         parser.error("--min-valid-fraction must be between 0 and 1")
+    if args.submit or args.local:
+        check_training_python(args.python)
     stage, manifest, command, sbatch = prepare(args)
     print(f"Run: {stage}")
     print(f"GPU: {args.gpus}; global batch: {manifest['global_batch']}; T_max: {manifest['scheduler_steps']}")

@@ -96,6 +96,38 @@ def test_insufficient_cpu_allocation_is_rejected_before_creating_run(tmp_path):
     assert not args.runs_dir.exists()
 
 
+def test_python_venv_symlink_path_is_not_resolved_to_system_python(tmp_path, monkeypatch):
+    args = make_args(tmp_path)
+    args.python = tmp_path / ".venv" / "bin" / "python"
+    original_resolve = Path.resolve
+    system_python = tmp_path / "usr" / "bin" / "python3.9"
+
+    def resolve_like_linux_venv(path, *values, **kwargs):
+        if path == args.python:
+            return system_python
+        return original_resolve(path, *values, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve_like_linux_venv)
+    _, _, command, sbatch = experiment.prepare(args)
+    assert command[0] == str(args.python.absolute())
+    assert str(system_python) not in sbatch[-1]
+
+
+def test_environment_probe_uses_venv_path_and_reports_missing_torch(tmp_path, monkeypatch):
+    python = tmp_path / "venv-python"
+    python.touch()
+    commands = []
+
+    def failed_probe(command, **kwargs):
+        commands.append(command)
+        return argparse.Namespace(returncode=1, stdout="", stderr="No module named 'torch'")
+
+    monkeypatch.setattr(experiment.subprocess, "run", failed_probe)
+    with pytest.raises(RuntimeError, match="No module named 'torch'"):
+        experiment.check_training_python(python)
+    assert commands[0][0] == str(python.absolute())
+
+
 def test_huber_value_gradient_and_target_mask():
     torch = pytest.importorskip("torch")
     from training.losses import HuberAGLLossCalculator
