@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import math
 
 import torch
 from torch.nn import MSELoss
@@ -76,6 +77,30 @@ class NoNaNMSEAGLLossCalculator(LossCalculator):
         not_nan = ~torch.isnan(diff)
         loss = torch.mean(diff.masked_select(not_nan) ** 2)
         return loss
+
+
+class HuberAGLLossCalculator(LossCalculator):
+    """Robust height loss in metres; zero-height ground truth remains valid."""
+
+    def __init__(self, delta=1.0, max_height=250.0, **kwargs):
+        if not math.isfinite(delta) or not math.isfinite(max_height) or delta <= 0 or max_height <= 0:
+            raise ValueError("Huber delta and max_height must be positive")
+        self.delta = delta
+        self.max_height = max_height
+
+    def calculate_loss(self, outputs, sample):
+        output = outputs["height"].float().squeeze(1)
+        target = sample["agl"].to(device=output.device, dtype=torch.float32)
+        if output.shape != target.shape:
+            raise ValueError(f"Huber AGL shape mismatch: {output.shape} != {target.shape}")
+        valid = torch.isfinite(target) & (target >= 0) & (target <= self.max_height)
+        if not torch.isfinite(output[valid]).all():
+            raise ValueError("Non-finite predicted height in Huber loss")
+        if not valid.any():
+            return output[valid].sum()
+        return torch.nn.functional.huber_loss(
+            output[valid], target[valid], reduction="mean", delta=self.delta,
+        )
 
 
 class NoNaNR2AGLLossCalculator(LossCalculator):

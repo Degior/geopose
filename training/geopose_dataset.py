@@ -1,7 +1,5 @@
 import json
 import os
-import random
-import traceback
 from pathlib import Path
 
 import albumentations as A
@@ -11,6 +9,7 @@ from osgeo import gdal
 from torch.utils.data import Dataset
 
 from utilities.augmentation_vflow import augment_vflow
+from training.crops import choose_crop
 
 RNG = np.random.RandomState(777)
 
@@ -98,9 +97,11 @@ class GeoposeDataset(Dataset):
             nan_placeholder: int = 65535,
             multiplier=1,
             rng=RNG,
+            min_valid_fraction=0.0,
     ):
         self.dataset_dir = dataset_dir
         self.crop_size = crop_size
+        self.min_valid_fraction = min_valid_fraction
         self.is_val = mode == "val"
         self.is_train = mode == "train"
         self.rng = rng
@@ -149,23 +150,11 @@ class GeoposeDataset(Dataset):
             xydir = np.array([xdir, ydir])
 
             crop_size = self.crop_size
-            height = image.shape[0]
-            tries = 0
-            while tries < 10:
-                y = random.randint(0, height - crop_size - 1)
-                x = random.randint(0, height - crop_size - 1)
-                if not self.is_val:
-                    tries += 1
-                    nan_mask = np.isnan(agl[y: y + crop_size, x:x + crop_size])
-                    if np.count_nonzero(nan_mask[~nan_mask]) < 1024 and tries < 9:
-                        continue
-
-                    agl = agl[y: y + crop_size, x:x + crop_size]
-                    image = image[y: y + crop_size, x:x + crop_size]
-                    mag = mag[y: y + crop_size, x:x + crop_size]
-                    break
-                else:
-                    break
+            if not self.is_val:
+                y, x = choose_crop(agl, crop_size, self.min_valid_fraction)
+                agl = agl[y:y + crop_size, x:x + crop_size]
+                image = image[y:y + crop_size, x:x + crop_size]
+                mag = mag[y:y + crop_size, x:x + crop_size]
 
             image = (np.transpose(image, (2, 0, 1)) / 255. - 0.5) * 2
 
@@ -176,9 +165,8 @@ class GeoposeDataset(Dataset):
             return {"image": image, "xydir": xydir, "agl": agl, "mag": mag, "scale": scale, "city_ohe": city_ohe,
                     "city": city, "mag_target_mean": mag_target_mean, "agl_target_mean": agl_target_mean,
                     "name": file_id}
-        except:
-            traceback.print_exc()
-            return self.__getitem__(random.randint(0, len(self.names) - 1))
+        except Exception as error:
+            raise RuntimeError(f"Could not load {city}_{file_id}: {error}") from error
 
     def __len__(self):
         return len(self.names)
