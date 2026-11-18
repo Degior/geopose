@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import traceback
 import re
 import uuid
 from typing import Dict
@@ -17,7 +16,7 @@ import cv2
 cv2.ocl.setUseOpenCL(False)
 cv2.setNumThreads(0)
 
-from tqdm import tqdm
+from training.logging_utils import print_main, terminal_progress
 
 import torch.distributed as dist
 
@@ -49,7 +48,8 @@ class GeoposeEvaluator(Evaluator):
     def validate(self, dataloader: DataLoader, model: torch.nn.Module, distributed: bool = False, local_rank: int = 0,
                  snapshot_name: str = "") -> Dict:
 
-        for sample in tqdm(dataloader):
+        print_main('Validation: generating predictions', rank=local_rank)
+        for sample in terminal_progress(dataloader, rank=local_rank, desc='Validation'):
                 image = sample["image"]
                 city_ohe = sample["city_ohe"]
                 agl = sample["agl"]
@@ -74,9 +74,7 @@ class GeoposeEvaluator(Evaluator):
                     # vflow pred
                     angle = np.arctan2(xydir_pred[batch_ind][0], xydir_pred[batch_ind][1])
                     vflow_data = {
-                        "scale": np.float64(
-                            scale_pred[batch_ind]
-                        ),  # upsample
+                        "scale": float(scale_pred[batch_ind].item()),
                         "angle": np.float64(angle),
                     }
 
@@ -102,6 +100,7 @@ class GeoposeEvaluator(Evaluator):
             e_args.predictions_dir = self.args.preds_dir
             e_args.output_dir = os.path.join(self.args.output_dir, "evaluation")
             e_args.num_processes = int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 1))
+            e_args.compact = True
             res = {"r2": evaluate_r2(e_args)}
         dist.barrier()
         torch.cuda.empty_cache()
@@ -110,10 +109,10 @@ class GeoposeEvaluator(Evaluator):
     def get_improved_metrics(self, prev_metrics: Dict, current_metrics: Dict) -> Dict:
         improved = {}
         if current_metrics["r2"] > prev_metrics["r2"]:
-            print("R2 AGL improved from {:.4f} to {:.4f}".format(prev_metrics["r2"], current_metrics["r2"]))
+            print("Validation R2 improved: {:.6f} -> {:.6f}".format(prev_metrics["r2"], current_metrics["r2"]), flush=True)
             improved["r2"] = current_metrics["r2"]
         else:
-            print("Best R2 AGL {:.4f} current {:.4f}".format(prev_metrics["r2"], current_metrics["r2"]))
+            print("Validation R2: current={:.6f}, best={:.6f}".format(current_metrics["r2"], prev_metrics["r2"]), flush=True)
         return improved
 
 
@@ -147,8 +146,11 @@ def parse_args():
     arg('--min-valid-fraction', type=float, default=0.0,
         help='Preferred valid crop fraction; best usable attempt is used if it cannot be reached')
     arg('--auto-schedule', action='store_true')
+    arg('--log-every', type=int, default=100, help='Rank 0 training output interval in steps')
 
     args = parser.parse_args()
+    if args.log_every < 1:
+        parser.error('--log-every must be positive')
     if not 0 <= args.min_valid_fraction <= 1:
         parser.error('--min-valid-fraction must be between 0 and 1')
     if args.resume and not os.path.isfile(args.resume):
@@ -204,6 +206,7 @@ def main():
         from_zero=args.from_zero,
         zero_score=args.zero_score,
         auto_schedule=args.auto_schedule,
+        log_every=args.log_every,
     )
 
     data_train, data_val = create_data_datasets(args)
@@ -212,9 +215,6 @@ def main():
                              train_data=data_train, val_data=data_val)
     try:
         trainer.fit()
-    except:
-        traceback.print_exc()
-        raise
     finally:
         if dist.is_initialized():
             dist.destroy_process_group()

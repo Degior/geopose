@@ -19,6 +19,7 @@ from training.schedulers import ExponentialLRScheduler, PolyLR, LRStepScheduler
 cv2.ocl.setUseOpenCL(False)
 cv2.setNumThreads(0)
 import torch.distributed as dist
+from training.logging_utils import print_main
 
 
 
@@ -68,11 +69,11 @@ def create_optimizer(optimizer_config, model, master_params=None):
 
         params.extend(make_params(classifier_params, optimizer_config["classifier_lr"]))
         params.extend(make_params(net_params))
-        print("param_groups", len(params))
+        print_main("Optimizer parameter groups:", len(params))
     else:
         param_optimizer = list(model.named_parameters())
         params = make_params(param_optimizer)
-        print("param_groups", len(params))
+        print_main("Optimizer parameter groups:", len(params))
     if optimizer_config["type"] == "SGD":
         optimizer = optim.SGD(params,
                               lr=optimizer_config["learning_rate"],

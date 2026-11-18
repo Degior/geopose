@@ -3,7 +3,7 @@ import argparse
 import functools
 import os
 import numpy as np
-from tqdm import tqdm
+from training.logging_utils import terminal_progress
 from glob import glob
 import random
 import json
@@ -220,7 +220,7 @@ def get_city_scores(args, site):
     # compute metrics for each image
     pool = multiprocessing.Pool(args.num_processes)
     results = []
-    for result in tqdm(
+    for result in terminal_progress(
         pool.imap_unordered(functools.partial(get_current_metrics, args=args), items),
         total=len(items),
     ):
@@ -297,7 +297,8 @@ def get_city_scores(args, site):
     mean_agl_error = np.nanmean(agl_error)
     rms_agl_error = np.sqrt(np.nanmean(np.square(agl_rms)))
     # compute AGL and EPE R-square
-    print("Computing AGL and VFLOW R-squares...")
+    if not getattr(args, "compact", False):
+        print("Computing AGL and VFLOW R-squares...")
     agl_gt_mean = agl_gt_sum / (agl_count + 0.0001)
     vflow_gt_mean = vflow_gt_sum / (vflow_count + 0.0001)
     agl_denom = 0.0
@@ -308,7 +309,7 @@ def get_city_scores(args, site):
     pool = multiprocessing.Pool(args.num_processes)
     agl_denoms = []
     vflow_denoms = []
-    for (agl_denom, vflow_denom) in tqdm(
+    for (agl_denom, vflow_denom) in terminal_progress(
         pool.imap_unordered(
             functools.partial(
                 get_r2_denoms, agl_gt_mean=agl_gt_mean, vflow_gt_mean=vflow_gt_mean
@@ -347,21 +348,26 @@ def get_city_scores(args, site):
         fid.write("AGL R-square: %f\n" % agl_R2)
         fid.write("VFLOW R-square: %f\n" % vflow_R2)
         fid.close()
-    # write statistics to screen
-    print(f"\n{site} MEAN ERROR")
-    print("Angle error: %f" % mean_angle_error)
-    print("Scale error: %f" % mean_scale_error)
-    print("Mag error: %f" % mean_mag_error)
-    print("EPE: %f" % mean_epe)
-    print("AGL error: %f" % mean_agl_error)
-    print("ROOT MEAN SQUARE ERROR")
-    print("Angle error: %f" % rms_angle_error)
-    print("Scale error: %f" % rms_scale_error)
-    print("Mag error: %f" % rms_mag_error)
-    print("EPE error: %f" % rms_epe)
-    print("AGL error: %f" % rms_agl_error)
-    print("AGL R-square: ", agl_R2)
-    print("VFLOW R-square: ", vflow_R2)
+    # Keep detailed results in metrics.txt; batch jobs print one line per city.
+    if getattr(args, "compact", False):
+        print(f"{site} | height MAE={mean_agl_error:.4f}m RMSE={rms_agl_error:.4f}m | "
+              f"AGL R2={agl_R2:.6f} VFLOW R2={vflow_R2:.6f}", flush=True)
+    else:
+        # write statistics to screen
+        print(f"\n{site} MEAN ERROR")
+        print("Angle error: %f" % mean_angle_error)
+        print("Scale error: %f" % mean_scale_error)
+        print("Mag error: %f" % mean_mag_error)
+        print("EPE: %f" % mean_epe)
+        print("AGL error: %f" % mean_agl_error)
+        print("ROOT MEAN SQUARE ERROR")
+        print("Angle error: %f" % rms_angle_error)
+        print("Scale error: %f" % rms_scale_error)
+        print("Mag error: %f" % rms_mag_error)
+        print("EPE error: %f" % rms_epe)
+        print("AGL error: %f" % rms_agl_error)
+        print("AGL R-square: ", agl_R2)
+        print("VFLOW R-square: ", vflow_R2)
     return (vflow_R2 + agl_R2) / 2.0
 
 
@@ -372,11 +378,14 @@ def evaluate_r2(args):
     score_oma = get_city_scores(args, "OMA")
     score_atl = get_city_scores(args, "ATL")
     final_score = (score_arg + score_jax + score_oma + score_atl) / 4.0
-    print("ARG R-square: ", score_arg)
-    print("JAX R-square: ", score_jax)
-    print("OMA R-square: ", score_oma)
-    print("ATL R-square: ", score_atl)
-    print("FINAL R-square: ", final_score)
+    if getattr(args, "compact", False):
+        print(f"Validation R2 (AGL+VFLOW, mean over cities): {final_score:.6f}", flush=True)
+    else:
+        print("ARG R-square: ", score_arg)
+        print("JAX R-square: ", score_jax)
+        print("OMA R-square: ", score_oma)
+        print("ATL R-square: ", score_atl)
+        print("FINAL R-square: ", final_score)
     if args.output_dir:
         os.makedirs(args.output_dir, exist_ok=True)
         fid = open(os.path.join(args.output_dir, "metrics.txt"), "a+")
@@ -389,6 +398,7 @@ def create_arg_parser():
     global args
     parser = argparse.ArgumentParser()
     parser.add_argument("--rectify", action="store_true", help="write rectified images")
+    parser.add_argument("--compact", action="store_true", help="Print one summary line per city")
     parser.add_argument(
         "--output-dir", type=str, help="folder for output files", default=None
     )

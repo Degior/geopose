@@ -101,6 +101,7 @@ def prepare(args):
                "--workers", str(args.workers), "--data-dir", str(data), "--train-dir", str(truth),
                "--folds-csv", str(split), "--fold", str(args.fold), "--prefix", "folds_",
                "--run-id", run_id, "--stage", "height_tune",
+               "--log-every", str(getattr(args, 'log_every', 100)),
                "--crop", "1792", "--multiplier", "1", "--test_every", "2",
                "--min-valid-fraction", str(args.min_valid_fraction),
                "--output-dir", str(weights), "--logdir", str(stage / "tensorboard"),
@@ -122,6 +123,7 @@ def prepare(args):
                 "steps_per_epoch": steps, "scheduler_steps": steps * epochs,
                 "min_valid_fraction": args.min_valid_fraction,
                 "crop_coverage_policy": "prefer fraction, otherwise best of 10 with at least 1024 finite pixels",
+                "log_every": getattr(args, 'log_every', 100),
                 "weights": str(weights), "command": command, "sbatch": sbatch}
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return stage, manifest, command, sbatch
@@ -137,6 +139,7 @@ def main():
     parser.add_argument("--config", type=Path, default=ROOT / "configs/v2l_huber.json")
     parser.add_argument("--gpus", type=int, default=8)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--cpus", type=int)
     parser.add_argument("--memory", type=int, default=80000)
     parser.add_argument("--partition", default="hiperf")
@@ -157,6 +160,8 @@ def main():
         parser.error("GPU, worker and epoch counts must be positive")
     if not 0 <= args.min_valid_fraction <= 1:
         parser.error("--min-valid-fraction must be between 0 and 1")
+    if args.log_every < 1:
+        parser.error('--log-every must be positive')
     if args.submit or args.local:
         check_training_python(args.python)
     stage, manifest, command, sbatch = prepare(args)

@@ -14,7 +14,6 @@ from timm.utils import AverageMeter
 from torch.nn import DataParallel, SyncBatchNorm
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm
 
 from training import losses
 from training.config import load_config
@@ -22,6 +21,7 @@ from training.losses import LossCalculator
 from training.sampler import DistributedWeightedRandomSampler
 from training.utils import create_optimizer
 from utilities import unet
+from training.logging_utils import TrainingProgress, print_main
 
 
 @dataclasses.dataclass
@@ -41,6 +41,7 @@ class TrainConfiguration:
     workers: int = 8
     log_dir: str = "logs"
     auto_schedule: bool = False
+    log_every: int = 100
 
 
 class Evaluator(ABC):
@@ -85,7 +86,7 @@ class PytorchTrainer(ABC):
             if steps < 1:
                 raise ValueError('Dataset is too small for this distributed batch')
             schedule['params']['T_max'] = steps * schedule['epochs']
-            print('Computed cosine T_max:', schedule['params']['T_max'])
+            print_main('Computed cosine T_max:', schedule['params']['T_max'], rank=train_config.local_rank)
         self._init_distributed()
         self.evaluator = evaluator
         self.current_metrics = evaluator.init_metrics()
@@ -140,7 +141,10 @@ class PytorchTrainer(ABC):
             }, os.path.join(self.train_config.output_dir, self.snapshot_name + "_" + metric_name))
 
     def _run_one_epoch_train(self, loader: DataLoader):
-        iterator = tqdm(loader)
+        progress = TrainingProgress(
+            self.current_epoch, self.conf['optimizer']['schedule']['epochs'], len(loader),
+            rank=self.train_config.local_rank, every=self.train_config.log_every,
+        )
         loss_meter = AverageMeter()
         avg_meters = {"loss": loss_meter}
         for loss_def in self.losses:
@@ -149,11 +153,11 @@ class PytorchTrainer(ABC):
 
         if self.conf["optimizer"]["schedule"]["mode"] == "epoch":
             self.scheduler.step(self.current_epoch)
-        for i, sample in enumerate(iterator):
+        for i, sample in enumerate(loader):
             # todo: make configurable
             imgs = sample["image"].cuda().float()
             self.optimizer.zero_grad()
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 output = self.model(imgs)
                 total_loss = 0
                 for loss_def in self.losses:
@@ -163,10 +167,7 @@ class PytorchTrainer(ABC):
                     total_loss += loss_def.weight * l
             loss_meter.update(total_loss.item(), imgs.size(0))
             avg_metrics = {k: v.avg for k, v in avg_meters.items()}
-            iterator.set_postfix({"lr": float(self.scheduler.get_lr()[-1]),
-                                  "epoch": self.current_epoch,
-                                  **avg_metrics
-                                  })
+            progress.update(i + 1, avg_metrics, float(self.scheduler.get_last_lr()[-1]))
             self.gscaler.scale(total_loss).backward()
             self.gscaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
@@ -176,6 +177,7 @@ class PytorchTrainer(ABC):
             dist.barrier()
             if self.conf["optimizer"]["schedule"]["mode"] in ("step", "poly"):
                 self.scheduler.step(i + self.current_epoch * len(loader))
+        progress.finish({name: meter.avg for name, meter in avg_meters.items()})
         if self.train_config.local_rank == 0:
             for idx, param_group in enumerate(self.optimizer.param_groups):
                 lr = param_group['lr']
@@ -237,7 +239,7 @@ class PytorchTrainer(ABC):
                 p.requires_grad = True
 
     def _init_amp(self):
-        self.gscaler = torch.cuda.amp.GradScaler()
+        self.gscaler = torch.amp.GradScaler('cuda')
 
         if self.train_config.distributed:
             self.model = DistributedDataParallel(self.model, device_ids=[self.train_config.local_rank],
@@ -262,7 +264,7 @@ class PytorchTrainer(ABC):
         if not checkpoint_path:
             return
         if os.path.isfile(checkpoint_path):
-            print("=> loading checkpoint '{}'".format(checkpoint_path))
+            print_main("=> loading checkpoint '{}'".format(checkpoint_path), rank=self.train_config.local_rank)
             checkpoint = torch.load(checkpoint_path, map_location='cpu')
             if 'state_dict' in checkpoint:
                 state_dict = checkpoint['state_dict']
@@ -272,7 +274,7 @@ class PytorchTrainer(ABC):
                 for k, v in state_dict.items():
                     ori_size = orig_state_dict[k].size() if k in orig_state_dict else None
                     if v.size() != ori_size:
-                        print("SKIPPING!!! Shape of {} changed from {} to {}".format(k, v.size(), ori_size))
+                        print_main("SKIPPING!!! Shape of {} changed from {} to {}".format(k, v.size(), ori_size), rank=self.train_config.local_rank)
                         mismatched_keys.append(k)
                 for k in mismatched_keys:
                     del state_dict[k]
@@ -281,18 +283,18 @@ class PytorchTrainer(ABC):
                     self.current_epoch = checkpoint['epoch']
                     if not self.train_config.zero_score:
                         self.current_metrics = checkpoint.get('metrics', self.evaluator.init_metrics())
-                print("=> loaded checkpoint '{}' (epoch {})"
-                      .format(checkpoint_path, checkpoint['epoch']))
+                print_main("=> loaded checkpoint '{}' (epoch {})"
+                           .format(checkpoint_path, checkpoint['epoch']), rank=self.train_config.local_rank)
             else:
                 model.load_state_dict(checkpoint)
         else:
-            print("=> no checkpoint found at '{}'".format(checkpoint_path))
+            print_main("=> no checkpoint found at '{}'".format(checkpoint_path), rank=self.train_config.local_rank)
         if self.train_config.from_zero:
             self.current_metrics = self.evaluator.init_metrics()
             self.current_epoch = 0
 
     def _init_model(self):
-        print(self.train_config)
+        print_main(self.train_config, rank=self.train_config.local_rank)
 
         encoder_params = dict(self.conf["encoder_params"])
         if self.train_config.resume_checkpoint:

@@ -39,7 +39,7 @@ class ScaleHead(nn.Module):
         self.dot = torch.dot
 
     def forward(self, mag, height):
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast('cuda', enabled=False):
             curr_mag = self.flatten(mag, start_dim=1).float()
             curr_height = self.flatten(height, start_dim=1).float()
             batch_size = curr_mag.shape[0]
